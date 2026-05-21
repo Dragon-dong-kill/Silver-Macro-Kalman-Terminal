@@ -204,5 +204,5 @@ def _build_fallback_analysis(macro, filtered):
         "key_drivers": drivers,
         "risk_factors": risks,
         "short_term_view": short_view,
-        "macro_assessment": f"情绪{Z_s:+.1f} 美元Z_{z_d:+.1f} 利率Z_{z_r:+.1f}",
+        "macro_assessment": "情绪{:+.1f} 美元 {:+.1f} 利率 {:+.1f}".format(z_s, z_d, z_r),
     }
