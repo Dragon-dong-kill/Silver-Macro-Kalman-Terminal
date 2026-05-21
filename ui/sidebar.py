@@ -42,6 +42,11 @@ def sidebar_controls() -> dict[str, bool | float | int | str]:
     reward_risk = st.sidebar.slider("目标 / 风险比", 0.50, 5.00, 2.00, 0.10)
 
     st.sidebar.divider()
+    st.sidebar.caption("🤖 AI 基本面分析")
+    deepseek_key = st.sidebar.text_input("DeepSeek API Key", type="password", placeholder="sk-...")
+    run_ai = st.sidebar.button("运行 AI 分析", type="secondary")
+
+    st.sidebar.divider()
     auto_refresh = st.sidebar.toggle("自动刷新最新数据", value=False)
     if st.sidebar.button("刷新缓存"):
         st.cache_data.clear()
@@ -61,6 +66,8 @@ def sidebar_controls() -> dict[str, bool | float | int | str]:
         "stop_mult": stop_mult,
         "reward_risk": reward_risk,
         "auto_refresh": auto_refresh,
+        "deepseek_key": deepseek_key,
+        "run_ai": run_ai,
     }
 
 
