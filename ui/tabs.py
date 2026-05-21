@@ -155,8 +155,10 @@ def render_trade_tab(filtered, macro, signal_frame, opportunities, latest_quote,
     c5.metric("第一目标", target_text)
 
     fv = float(plan.get("fv_deviation", 0))
-    st.markdown("价格偏离滤波 **{:.2f}%** | 波动缓冲 **{:.3f}** | ADX **{:.2f}** | 公允值偏离 **{:+.2f}σ**".format(
-        latest['price_bias_pct'], latest['vol_buffer'], float(latest.get('adx', np.nan)), fv))
+    bb_p = float(plan.get("bb_position", 0))
+    st.markdown(
+        "价格偏离滤波 **{:.2f}%** | ADX **{:.2f}** | 布林带位置 **{:+.1f}σ** | 公允值偏离 **{:+.2f}σ**".format(
+            latest['price_bias_pct'], float(latest.get('adx', np.nan)), bb_p, fv))
 
     st.plotly_chart(build_price_chart(filtered), use_container_width=True, key="tpc")
     st.plotly_chart(build_velocity_chart(filtered), use_container_width=True, key="tvc")
