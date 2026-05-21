@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from config import DOLLAR_WEIGHT, DXY_TICKER, FRED_REAL_RATE, RATE_WEIGHT, SENTIMENT_WEIGHT, TNX_TICKER, APP_NAME
 from data.sentiment import format_news_table
 from signals.signal_builder import current_trade_plan
 from ui.charts import (
