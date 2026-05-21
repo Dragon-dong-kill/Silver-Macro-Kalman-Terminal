@@ -1,4 +1,3 @@
-from __future__ import annotations
 
 APP_NAME = "Silver-Macro-Kalman-Terminal"
 SILVER_TICKER = "SI=F"
