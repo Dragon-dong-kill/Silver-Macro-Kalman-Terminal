@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from io import StringIO
-from typing import Iterable
+from typing import Iterable, Optional
 
 import numpy as np
 import pandas as pd
@@ -42,12 +42,12 @@ def _parse_yf_close(raw: pd.DataFrame, tickers: list[str]) -> FetchResult:
         else:
             close = raw[["Close"]].rename(columns={"Close": tickers[0]})
     except Exception as exc:
-        return FetchResult(pd.DataFrame(), [f"鏃犳硶瑙ｆ瀽 yfinance 鏀剁洏浠锋暟鎹細{exc}"])
+        return FetchResult(pd.DataFrame(), [f"无法解析 yfinance 收盘价数据：{exc}"])
 
     close = normalize_index(close)
     for ticker in tickers:
         if ticker not in close.columns or close[ticker].dropna().empty:
-            warnings.append(f"yfinance 缂哄け鎴栬繑鍥炵┖鏁版嵁锛歿ticker}")
+            warnings.append(f"yfinance 缺失或返回空数据：{ticker}")
     return FetchResult(close, warnings)
 
 
@@ -64,10 +64,10 @@ def fetch_market_data(period: str, interval: str) -> FetchResult:
             timeout=YAHOO_TIMEOUT,
         )
     except Exception as exc:
-        return FetchResult(pd.DataFrame(), [f"yfinance 琛屾儏涓嬭浇澶辫触锛歿exc}"])
+        return FetchResult(pd.DataFrame(), [f"yfinance 行情下载失败：{exc}"])
 
     if raw.empty:
-        return FetchResult(pd.DataFrame(), ["yfinance 鏈繑鍥炲彲鐢ㄨ鎯呮暟鎹€?])
+        return FetchResult(pd.DataFrame(), ["yfinance 未返回可用行情数据。"])
     return _parse_yf_close(raw, MKT_TICKERS)
 
 
@@ -84,10 +84,10 @@ def fetch_extra_data(period: str, interval: str) -> FetchResult:
             timeout=YAHOO_TIMEOUT,
         )
     except Exception as exc:
-        return FetchResult(pd.DataFrame(), [f"棰濆鍝佺涓嬭浇澶辫触锛歿exc}"])
+        return FetchResult(pd.DataFrame(), [f"额外品种下载失败：{exc}"])
 
     if raw.empty:
-        return FetchResult(pd.DataFrame(), ["棰濆鍝佺鏁版嵁涓虹┖銆?])
+        return FetchResult(pd.DataFrame(), ["额外品种数据为空。"])
     return _parse_yf_close(raw, EXTRA_TICKERS)
 
 
@@ -124,7 +124,7 @@ def fetch_silver_ohlc(period: str, interval: str) -> FetchResult:
 
 
 @st.cache_data(ttl=CACHE_TTL_LATEST, show_spinner=False)
-def fetch_latest_silver_price() -> tuple[float | None, str | None]:
+def fetch_latest_silver_price():
     try:
         ticker = yf.Ticker(SILVER_TICKER)
         fast_info = getattr(ticker, "fast_info", None)
@@ -137,62 +137,59 @@ def fetch_latest_silver_price() -> tuple[float | None, str | None]:
         if not intraday.empty and "Close" in intraday:
             return float(intraday["Close"].dropna().iloc[-1]), None
     except Exception as exc:
-        return None, f"鐧介摱瀹炴椂鎶ヤ环鑾峰彇澶辫触锛歿exc}"
+        return None, f"白银实时报价获取失败：{exc}"
 
-    return None, "鐧介摱瀹炴椂鎶ヤ环鏆備笉鍙敤銆?
+    return None, "白银实时报价暂不可用。"
 
 
 FRED_CSV_URL = "https://fred.stlouisfed.org/data/{symbol}.txt"
 
-def _fetch_fred_series(symbol: str) -> pd.DataFrame | None:
-    try:
-        resp = requests.get(FRED_CSV_URL.format(symbol=symbol), timeout=15)
-        resp.raise_for_status()
-    except Exception:
-        return None
-
-    lines = resp.text.splitlines()
-    data_start = 0
-    for i, line in enumerate(lines):
-        if line.startswith("DATE"):
-            data_start = i
-            break
-    csv_text = "\n".join(lines[data_start:])
-    try:
-        frame = pd.read_csv(StringIO(csv_text), parse_dates=["DATE"], index_col="DATE")
-        frame = frame.rename(columns={"VALUE": symbol})
-        return frame
-    except Exception:
-        return None
 
 @st.cache_data(ttl=CACHE_TTL_REAL_RATE, show_spinner=False)
-def fetch_fred_data(start: datetime, end: datetime, symbols: list[str]) -> FetchResult:
-    warnings: list[str] = []
-    all_data: dict[str, pd.DataFrame] = {}
+def fetch_fred_data(start, end, symbols):
+    warnings = []
+    all_data = {}
+
     for symbol in symbols:
-        raw = _fetch_fred_series(symbol)
-        if raw is None or raw.empty:
-            warnings.append(f"FRED {symbol} 鏁版嵁鑾峰彇澶辫触鎴栦负绌恒€?)
+        raw = None
+        try:
+            url = FRED_CSV_URL.format(symbol=symbol)
+            resp = requests.get(url, timeout=15)
+            resp.raise_for_status()
+            lines = resp.text.splitlines()
+            data_start = 0
+            for i, line in enumerate(lines):
+                if line.startswith("DATE"):
+                    data_start = i
+                    break
+            csv_text = "\n".join(lines[data_start:])
+            raw = pd.read_csv(StringIO(csv_text), parse_dates=["DATE"], index_col="DATE")
+            raw = raw.rename(columns={"VALUE": symbol})
+        except Exception:
+            warnings.append(f"FRED {symbol} 数据获取失败。")
             continue
+
+        if raw is None or raw.empty:
+            warnings.append(f"FRED {symbol} 数据为空。")
+            continue
+
         raw = normalize_index(raw)
         mask = (raw.index >= pd.Timestamp(start)) & (raw.index <= pd.Timestamp(end))
         sliced = raw.loc[mask]
         if sliced.empty:
-            warnings.append(f"FRED {symbol} 鍦ㄦ寚瀹氭椂闂磋寖鍥村唴鏃犳暟鎹€?)
+            warnings.append(f"FRED {symbol} 在指定时间范围内无数据。")
             continue
         all_data[symbol] = sliced
 
     if not all_data:
         return FetchResult(pd.DataFrame(), warnings)
 
-    merged = pd.concat(all_data.values(), axis=1)
+    merged = pd.concat(list(all_data.values()), axis=1)
     merged.columns = list(all_data.keys())
     return FetchResult(merged, warnings)
 
 
-def resolve_data_range(
-    market_data: pd.DataFrame,
-) -> tuple[datetime, datetime]:
+def resolve_data_range(market_data):
     start = market_data.index.min().to_pydatetime() - timedelta(days=10)
     end = market_data.index.max().to_pydatetime() + timedelta(days=1)
     return start, end
