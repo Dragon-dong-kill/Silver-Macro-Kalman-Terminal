@@ -236,3 +236,46 @@ def build_extra_charts(macro: pd.DataFrame) -> dict[str, go.Figure]:
         charts["breakeven"] = fig
 
     return charts
+
+
+def build_regime_chart(macro):
+    chart = macro.tail(250).copy()
+    if "market_regime" not in chart.columns:
+        return go.Figure()
+
+    regime_map = {"ranging": 0, "trending": 1, "strong_trending": 2}
+    color_map = {"ranging": "#90A4AE", "trending": "#FFA726", "strong_trending": "#EF5350"}
+    regime_num = chart["market_regime"].map(regime_map).fillna(0)
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=chart.index, y=regime_num,
+        mode="lines",
+        name="市场状态",
+        line=dict(color="#78909C", width=1.5),
+        fill="tozeroy",
+        fillcolor="rgba(120,144,156,0.15)",
+    ))
+
+    for regime, num in regime_map.items():
+        mask = chart["market_regime"] == regime
+        if mask.any():
+            fig.add_trace(go.Scatter(
+                x=chart.index[mask],
+                y=[num] * mask.sum(),
+                mode="markers",
+                name=regime,
+                marker=dict(color=color_map[regime], size=8, symbol="square"),
+                showlegend=True,
+            ))
+
+    fig.update_layout(
+        height=280,
+        margin=dict(l=10, r=10, t=35, b=10),
+        title="市场状态检测 (0=震荡 1=趋势 2=强趋势)",
+        xaxis_title=None,
+        yaxis=dict(tickvals=[0, 1, 2], ticktext=["震荡", "趋势", "强趋势"]),
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02),
+    )
+    return fig
