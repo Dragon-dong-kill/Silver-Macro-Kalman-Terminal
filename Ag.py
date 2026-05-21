@@ -14,7 +14,6 @@ from data.fetcher import (
 from data.indicators import calculate_adx
 from data.sentiment import daily_sentiment, fetch_news_sentiment, format_news_table
 from kalman.filter import run_kalman
-from signals.ai_analyst import run_ai_analysis
 from signals.macro_score import compute_macro_score
 from signals.signal_builder import build_opportunity_table, build_signal_frame, current_trade_plan
 from ui.backtest_tab import render_backtest_tab
@@ -85,12 +84,17 @@ def main():
     ai_result = None
     ai_score = 0
 
-    if api_key and controls.get("run_ai", False):
+    try:
+        from signals.ai_analyst import run_ai_analysis
+    except ImportError:
+        run_ai_analysis = None
+
+    if api_key and controls.get("run_ai", False) and run_ai_analysis:
         with st.spinner("🤖 AI 正在分析基本面..."):
             ai_result = run_ai_analysis(macro, filtered, news.data, api_key)
             if ai_result:
                 ai_score = int(ai_result.get("score", 0))
-    elif not api_key:
+    elif run_ai_analysis:
         ai_result = run_ai_analysis(macro, filtered, news.data, "")
         if ai_result:
             ai_score = int(ai_result.get("score", 0))
